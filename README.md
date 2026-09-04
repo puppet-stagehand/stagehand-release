@@ -66,6 +66,19 @@ ghcr.io/puppet-stagehand/stagehand-release/console:1.0.2
 
 Pull a specific version instead of `latest` for anything other than casual testing.
 
+**Filing an issue?** Since `latest`/`test-pilots` are floating tags, include the exact
+build you're running:
+
+```bash
+curl http://localhost:8767/api/v1/meta/version
+```
+
+```json
+{"version":"1.0.2","commit":"199d4fe9f0e2f51a92a4e5d33bf19edd68b52665","date":"2026-09-04T03:27:14Z","channel":"test-pilots","go_version":"go1.26.8","product_name":"Puppet Stagehand"}
+```
+
+No login required. The same version string is also shown under the logo in the console's own sidebar.
+
 ## Required environment variables
 
 | Variable | Required | Notes |

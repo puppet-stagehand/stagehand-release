@@ -6,6 +6,12 @@
 # Viewer's "Add instance" flow after first login. There is no env var for
 # this; it's entirely UI-driven.
 #
+# Connecting to Puppet Server/PuppetDB needs a client cert signed by your
+# Puppet CA, placed in ./certs (mounted below at /certs, read-only) -- see
+# "Connecting to your Puppet Server / PuppetDB" in the README for how to
+# generate one. The ./certs directory is created empty if it doesn't exist;
+# the console just won't have anything to read from it until you populate it.
+#
 # Usage:
 #   docker compose up -d
 #   open http://localhost:8767
@@ -45,6 +51,8 @@ services:
     environment:
       PSH_SECRET_KEY: "${PSH_SECRET_KEY:?set PSH_SECRET_KEY -- see README}"
       PSH_DATABASE_URL: "postgres://psh:psh@postgres:5432/psh?sslmode=disable"
+    volumes:
+      - ./certs:/certs:ro
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8767/api/v1/healthz"]
       interval: 10s

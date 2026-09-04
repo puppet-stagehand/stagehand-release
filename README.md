@@ -24,6 +24,43 @@ Then open **http://localhost:8767** and complete the first-run setup wizard (cre
 
 This starts two containers: the console itself, and a Postgres 17 database for its own data. It does **not** include Puppet Server or PuppetDB -- the console doesn't need either to boot. Connect it to your existing Puppet installation (PE, Core, or OpenVox) from inside the console after setup: **Estate Viewer -> Add instance**, or **Settings -> Connections** for the default instance. There's no environment variable for this -- it's entirely UI-driven, and the wizard won't let you confirm an instance until every connection you fill in has actually passed its own test.
 
+### Connecting to your Puppet Server / PuppetDB
+
+The console talks to Puppet Server and PuppetDB over mutual-TLS -- it needs its own
+client certificate, signed by your Puppet CA, the same way a real Puppet agent does.
+When installed via the Puppet Installer this cert is generated automatically; running
+standalone, you generate it yourself, once:
+
+1. **On your Puppet primary server**, generate and auto-sign a client cert for the console:
+   ```bash
+   sudo /opt/puppetlabs/bin/puppetserver ca generate --certname console.example.com --ca-client
+   ```
+   (Use any certname you like -- it just identifies the console to your Puppet CA.)
+
+2. **Copy the three resulting files** to a `certs/` folder next to this repo's `docker-compose.yaml`:
+   ```bash
+   mkdir -p certs
+   scp your-primary:/etc/puppetlabs/puppet/ssl/certs/console.example.com.pem       certs/console.pem
+   scp your-primary:/etc/puppetlabs/puppet/ssl/private_keys/console.example.com.pem certs/console.key
+   scp your-primary:/etc/puppetlabs/puppet/ssl/certs/ca.pem                        certs/ca.pem
+   ```
+   `docker-compose.yaml` already mounts `./certs` into the container at `/certs`, read-only.
+
+3. **In the console**, go to **Settings -> Connections** and fill in each service (Puppet Server, PuppetDB):
+   - **Host**: your Puppet primary's address, reachable from inside the container.
+     If Puppet runs on the *same* machine as Docker Desktop (macOS/Windows), use
+     `host.docker.internal`. Otherwise use its real hostname or IP.
+   - **Cert path**: `/certs/console.pem`
+   - **Key path**: `/certs/console.key`
+   - **CA cert path**: `/certs/ca.pem`
+   - Click **Save & test** -- it won't let you save until the connection actually works.
+
+   Puppet Server defaults to port 8140, PuppetDB to 8081.
+
+If you're managing more than one Puppet installation, each registered **instance** in
+Estate Viewer gets its own set of these connections -- switch the active instance in
+the sidebar first to edit a different one.
+
 To stop it:
 
 ```bash
@@ -48,6 +85,7 @@ docker run -d --name psh-console --network psh-net \
   -p 8767:8767 \
   -e PSH_SECRET_KEY="$PSH_SECRET_KEY" \
   -e PSH_DATABASE_URL="postgres://psh:psh@psh-postgres:5432/psh?sslmode=disable" \
+  -v "$(pwd)/certs:/certs:ro" \
   ghcr.io/puppet-stagehand/stagehand-release/console:latest
 ```
 

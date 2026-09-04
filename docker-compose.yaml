@@ -12,6 +12,18 @@
 # generate one. The ./certs directory is created empty if it doesn't exist;
 # the console just won't have anything to read from it until you populate it.
 #
+# PSH_BOLT_PROJECT points the console at a Bolt project directory it manages
+# itself: on every boot it stages its bundled Stagehand task module and a
+# bolt-project.yaml manifest there (never overwriting either if you've
+# customized them), plus a persistent SSH keypair for agentless/push runs.
+# Without this, task execution (patching, r10k deploys, etc.) has nothing to
+# run against -- see "Task execution (Bolt)" in the README. `bolt-project` is
+# a NAMED volume, not a bind mount, on purpose: the console runs as a
+# non-root user inside the container, and a fresh bind-mounted host
+# directory is created root-owned by the Docker daemon (Linux hosts enforce
+# this strictly), which the console then can't write into. The named volume
+# inherits the correct ownership from the image instead.
+#
 # Usage:
 #   docker compose up -d
 #   open http://localhost:8767
@@ -51,8 +63,10 @@ services:
     environment:
       PSH_SECRET_KEY: "${PSH_SECRET_KEY:?set PSH_SECRET_KEY -- see README}"
       PSH_DATABASE_URL: "postgres://psh:psh@postgres:5432/psh?sslmode=disable"
+      PSH_BOLT_PROJECT: /bolt-project
     volumes:
       - ./certs:/certs:ro
+      - bolt-project:/bolt-project
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8767/api/v1/healthz"]
       interval: 10s
@@ -62,3 +76,4 @@ services:
 
 volumes:
   psh-pgdata:
+  bolt-project:

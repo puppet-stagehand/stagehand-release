@@ -61,6 +61,25 @@ If you're managing more than one Puppet installation, each registered **instance
 Estate Viewer gets its own set of these connections -- switch the active instance in
 the sidebar first to edit a different one.
 
+### Task execution (Bolt)
+
+Patching, r10k control-repo deploys, and other task/plan runs execute through
+[Puppet Bolt](https://www.puppet.com/docs/bolt/latest/bolt.html), which the
+console image already bundles -- there's nothing extra to install. It does,
+though, need a writable **Bolt project directory** to keep its task module,
+project manifest, and a persistent SSH keypair in; `docker-compose.yaml`
+already points it at one (`PSH_BOLT_PROJECT=/bolt-project`, backed by the
+`bolt-project` named volume) and the console stages everything into it
+automatically on boot -- no separate module install or `bolt project init`
+step. Settings -> Execution shows the exact path this console resolved and
+where each check landed; **Service health** on the dashboard rolls that up
+into a single "Bolt execution" status.
+
+If you're running the containers manually (below) rather than through
+Compose, remember to pass the same `-e PSH_BOLT_PROJECT=/bolt-project -v
+bolt-project:/bolt-project` flags -- without them, task execution stays
+unavailable and Settings -> Execution reports no Bolt project configured.
+
 To stop it:
 
 ```bash
@@ -81,13 +100,22 @@ docker run -d --name psh-postgres --network psh-net \
 
 export PSH_SECRET_KEY=$(openssl rand -base64 32)
 
+docker volume create psh-bolt-project
+
 docker run -d --name psh-console --network psh-net \
   -p 8767:8767 \
   -e PSH_SECRET_KEY="$PSH_SECRET_KEY" \
   -e PSH_DATABASE_URL="postgres://psh:psh@psh-postgres:5432/psh?sslmode=disable" \
+  -e PSH_BOLT_PROJECT=/bolt-project \
   -v "$(pwd)/certs:/certs:ro" \
+  -v psh-bolt-project:/bolt-project \
   ghcr.io/puppet-stagehand/stagehand-release/console:latest
 ```
+
+`psh-bolt-project` is a **named** volume, not a bind-mounted host directory --
+the console container runs as a non-root user, and Docker creates a fresh
+bind-mount host directory owned by root, which that user can't write into. A
+named volume avoids that (see "Task execution (Bolt)" above).
 
 ## Image tags
 
@@ -124,6 +152,7 @@ No login required. The same version string is also shown under the logo in the c
 | `PSH_SECRET_KEY` | Yes | Base64-encoded 32-byte key (`openssl rand -base64 32`). Used to encrypt stored secrets (connection credentials, etc). Losing it makes existing encrypted data unreadable. |
 | `PSH_DATABASE_URL` | No (has a local-dev default) | Postgres connection string. Default is `postgres://psh:psh@localhost:5432/psh?sslmode=disable` -- override this for anything beyond local testing. |
 | `PSH_ADDR` | No | Listen address. Defaults to `:8767`. |
+| `PSH_BOLT_PROJECT` | No, but required for task execution | Writable directory the console stages its Bolt project into (module, manifest, SSH keypair) -- see "Task execution (Bolt)" above. Without it, patching/r10k/task runs stay unavailable; everything else works. |
 
 The console has no environment variable for connecting to Puppet/PuppetDB -- see "Quick start" above.
 

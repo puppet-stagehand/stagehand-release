@@ -1,0 +1,56 @@
+# Puppet Stagehand console -- standalone quick start.
+#
+# Brings up the console and a Postgres 17 database for it. This does NOT
+# include Puppet Server or PuppetDB -- point the console at your existing
+# Puppet installation (PE, Core, or OpenVox) from the setup wizard / Estate
+# Viewer's "Add instance" flow after first login. There is no env var for
+# this; it's entirely UI-driven.
+#
+# Usage:
+#   docker compose up -d
+#   open http://localhost:8767
+#
+# The console's data (Postgres) persists in the `psh-pgdata` named volume
+# across restarts. PSH_SECRET_KEY below is generated once and written to
+# .env on first run by the `openssl rand` line in the README -- keep that
+# value if you want your existing encrypted data (secrets, connection
+# credentials) to remain readable after a restart or upgrade.
+
+name: stagehand
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: psh
+      POSTGRES_PASSWORD: psh
+      POSTGRES_DB: psh
+    volumes:
+      - psh-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U psh"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  console:
+    image: ghcr.io/puppet-stagehand/stagehand-release/console:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8767:8767"
+    environment:
+      PSH_SECRET_KEY: "${PSH_SECRET_KEY:?set PSH_SECRET_KEY -- see README}"
+      PSH_DATABASE_URL: "postgres://psh:psh@postgres:5432/psh?sslmode=disable"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8767/api/v1/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  psh-pgdata:
